@@ -38,27 +38,32 @@ class QueryResponse(BaseModel):
     response: str
     sources: list
 
-
+# --- FIX 1: Use REDIS_HOST environment variable globally ---
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 try:
-    redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-    # Ping to check connection stability
+    # Changed 'localhost' here to the dynamic REDIS_HOST variable
+    redis_client = redis.Redis(host=REDIS_HOST, port=6379, db=0, decode_responses=True)
     redis_client.ping()
     print("🔴 Connected to Redis Cache successfully.")
 except Exception as e:
     print(f"⚠️ Redis connection failed. Proceeding without caching: {e}")
     redis_client = None
 
+# --- FIX 2: Define global OLLAMA_URL configuration fallback ---
+OLLAMA_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
+
 # --- Asynchronous Background Worker Logic ---
 def async_process_and_upsert(file_path: str, filename: str):
     """Processes newly uploaded text document into Pinecone without breaking main UI main thread."""
     try:
-        embeddings = OllamaEmbeddings(model="nomic-embed-text")
+        # FIX 3: Added base_url=OLLAMA_URL to the worker's embedding generator
+        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_URL)
         text_splitter = SemanticChunker(embeddings, breakpoint_threshold_type="percentile")
         
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             contract_text = f.read()
 
-        # Re-using your character split logic to prevent context overflows
         raw_sections = [s.strip() for s in contract_text.split("\n\n") if s.strip()]
         chunks = []
         section_batch = ""
@@ -73,7 +78,6 @@ def async_process_and_upsert(file_path: str, filename: str):
         if section_batch.strip():
             chunks.extend(text_splitter.create_documents([section_batch]))
 
-        # Prepare Batch Payload
         vectors_to_upsert = []
         for i, chunk in enumerate(chunks):
             vector = embeddings.embed_query(chunk.page_content)
@@ -83,7 +87,6 @@ def async_process_and_upsert(file_path: str, filename: str):
                 {"filename": filename, "text": chunk.page_content, "chunk_index": i}
             ))
 
-        # Atomic Bulk Uploads
         batch_size = 50
         for b in range(0, len(vectors_to_upsert), batch_size):
             index.upsert(vectors=vectors_to_upsert[b:b+batch_size])
@@ -92,8 +95,6 @@ def async_process_and_upsert(file_path: str, filename: str):
         
     except Exception as e:
         print(f"❌ [Worker Error] Failed processing file {filename}: {str(e)}")
-
-    
 
 
 # --- API Routes ---
@@ -113,11 +114,9 @@ async def upload_contract(background_tasks: BackgroundTasks, file: UploadFile = 
     
     saved_file_path = os.path.join(upload_dir, file.filename)
     
-    # Securely stream upload to local storage
     with open(saved_file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    # Kick off asynchronous pipeline calculation execution
     background_tasks.add_task(async_process_and_upsert, saved_file_path, file.filename)
     
     return {
@@ -141,7 +140,8 @@ async def query_rag_engine(payload: QueryRequest):
         print("🧊 [Cache Miss] Running full vector extraction pipeline...")
         
         # 2. Run normal RAG pipeline if it's a miss
-        embeddings = OllamaEmbeddings(model="nomic-embed-text")
+        # FIX 4: Added base_url=OLLAMA_URL to the query embeddings generator
+        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_URL)
         query_vector = embeddings.embed_query(payload.prompt)
         
         search_results = index.query(vector=query_vector, top_k=4, include_metadata=True)
@@ -168,7 +168,8 @@ async def query_rag_engine(payload: QueryRequest):
             ("human", "{question}")
         ])
         
-        llm = ChatOllama(model="llama3.2", temperature=0.0)
+        # FIX 5: Added base_url=OLLAMA_URL to the ChatOllama LLM initializer
+        llm = ChatOllama(model="llama3.2", temperature=0.0, base_url=OLLAMA_URL)
         chain = prompt_template | llm | StrOutputParser()
         
         ai_response = await chain.ainvoke({"context": full_context, "question": payload.prompt})
