@@ -1,4 +1,3 @@
-Markdown
 # Enterprise LegalAI Platform API ⚖️🤖
 
 A production-ready internal RAG (Retrieval-Augmented Generation) API engine optimized for multi-document contractual extraction using FastAPI, LangChain, Pinecone, and an integrated Redis caching layer—fully containerized with Docker.
@@ -50,15 +49,3 @@ Interactive API Dashboard: http://localhost:8000/docs
 
 Production Ingestion Workflow (Optional)
 To ingest your own raw text files into the cloud vector index, place your raw text agreements inside the ./data/raw_contracts/ folder and trigger the asynchronous ingestion pipeline by uploading via the /api/v1/upload endpoint in the Swagger UI.
-
-
----
-
-### Sync the Blueprint to GitHub
-
-Once you save the file, run this final sequence in your terminal to push your pristine documentation live:
-
-```bash
-git add README.md
-git commit -m "docs: update README to reflect hybrid docker-compose orchestration architecture"
-git push
