@@ -58,7 +58,7 @@ def async_process_and_upsert(file_path: str, filename: str):
     """Processes newly uploaded text document into Pinecone without breaking main UI main thread."""
     try:
         # FIX 3: Added base_url=OLLAMA_URL to the worker's embedding generator
-        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_URL)
+        embeddings = OllamaEmbeddings(model="nomic-embed-text")
         text_splitter = SemanticChunker(embeddings, breakpoint_threshold_type="percentile")
         
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -141,7 +141,7 @@ async def query_rag_engine(payload: QueryRequest):
         
         # 2. Run normal RAG pipeline if it's a miss
         # FIX 4: Added base_url=OLLAMA_URL to the query embeddings generator
-        embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=OLLAMA_URL)
+        embeddings = OllamaEmbeddings(model="nomic-embed-text")
         query_vector = embeddings.embed_query(payload.prompt)
         
         search_results = index.query(vector=query_vector, top_k=4, include_metadata=True)
@@ -169,7 +169,7 @@ async def query_rag_engine(payload: QueryRequest):
         ])
         
         # FIX 5: Added base_url=OLLAMA_URL to the ChatOllama LLM initializer
-        llm = ChatOllama(model="llama3.2", temperature=0.0, base_url=OLLAMA_URL)
+        llm = ChatOllama(model="llama3.2", temperature=0.0)
         chain = prompt_template | llm | StrOutputParser()
         
         ai_response = await chain.ainvoke({"context": full_context, "question": payload.prompt})
