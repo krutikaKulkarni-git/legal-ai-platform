@@ -1,4 +1,3 @@
-Markdown
 # Enterprise LegalAI Platform API ⚖️🤖
 
 A production-ready internal RAG (Retrieval-Augmented Generation) API engine optimized for multi-document contractual extraction using FastAPI, LangChain, Pinecone, and an integrated Redis caching layer.
