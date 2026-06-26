@@ -1,56 +1,64 @@
+Markdown
 # Enterprise LegalAI Platform API ⚖️🤖
 
-A production-ready internal RAG (Retrieval-Augmented Generation) API engine optimized for multi-document contractual extraction using FastAPI, LangChain, Pinecone, and an integrated Redis caching layer.
+A production-ready internal RAG (Retrieval-Augmented Generation) API engine optimized for multi-document contractual extraction using FastAPI, LangChain, Pinecone, and an integrated Redis caching layer—fully containerized with Docker.
 
-## Architecture Pipeline
-1. **Asynchronous Ingestion**: Documents are streamed to disk, segmented using a `SemanticChunker`, embedded via `nomic-embed-text`, and bulk-upserted (batch size: 50) to Pinecone via FastAPI background worker threads.
-2. **Optimized Query Loop**: Incoming user prompts are normalized and checked against a local **Redis Cache** (1-Hour TTL) for sub-millisecond responses on repeated queries.
-3. **Inference**: Cache misses trigger a vector search across Pinecone (Top K: 4) and context is passed into a local **Llama 3.2** model via Ollama with strict system-prompt constraints.
+## System Architecture & Pipeline
+1. **Asynchronous Ingestion**: Documents are streamed to disk, segmented using a `SemanticChunker`, embedded via `nomic-embed-text`, and bulk-upserted (batch size: 50) to a cloud Pinecone index via background worker threads.
+2. **Optimized Query Loop**: Incoming user prompts are normalized and checked against an isolated **Redis Cache container** (1-Hour TTL) for sub-millisecond responses on repeated queries.
+3. **Hybrid Inference Engine**: Cache misses trigger a vector search across Pinecone (Top K: 4). Context is passed out of the isolated Docker environment via a network bridge (`host.docker.internal`) to a local **Llama 3.2** model running natively via Ollama to maximize hardware acceleration on the host GPU.
 
 ---
 
-## Local Setup Instructions
+## Technical Prerequisites
 
-### 1. Clone the Repository
+Before spinning up the container stack, ensure you have the following installed on your host machine:
+* [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Ensure the daemon is running)
+* [Ollama](https://ollama.com/)
+
+### 1. Configure the Host LLM Engine
+To leverage local hardware acceleration, pull the required embedding and LLM weights natively:
 ```bash
-git clone <YOUR_REPOSITORY_URL>
-cd legal-ai-platform
-2. Install Python Dependencies
-Bash
-pip install -r requirements.txt
-3. Spin Up Background Infrastructure (Ollama & Redis)
-Ensure your local machine has Redis and Ollama installed and running:
-
-Bash
-# Start Redis Daemon
-brew services start redis
-
-# Ensure embedding and LLM models are pulled locally
 ollama pull nomic-embed-text
 ollama pull llama3.2
-4. Environment Configuration
-Create a .env file in the root directory:
+Because the application runs inside an isolated container, configure your native Ollama daemon to listen to incoming container traffic by running this in a separate terminal window:
+
+Bash
+OLLAMA_HOST=0.0.0.0:11434 OLLAMA_ORIGINS="*" ollama serve
+Local Deployment Instructions
+1. Clone & Configure Environment
+Clone the repository and create a .env file in the root directory:
+
+Bash
+git clone <YOUR_REPOSITORY_URL>
+cd legal-ai-platform
+Add your cloud vector database credentials to the .env file:
 
 Code snippet
-PINECONE_API_KEY=your_pinecone_api_key_here
-5. Ingest the Dataset (Optional)
-To build your own vector index using the CUAD contract dataset, place your .txt files in ./data/raw_contracts/ and run:
+PINECONE_API_KEY=your_actual_pinecone_api_key_here
+2. Launch the Containerized Stack
+Spin up the FastAPI web backend and the Redis caching layer simultaneously using Docker Compose:
 
 Bash
-python src/bulk_ingest.py
-6. Boot the API Engine
-Bash
-uvicorn src.main:app --reload
-Once started, navigate to http://127.0.0.1:8000/docs to explore the fully interactive Swagger API documentation panel!
+docker compose up --build
+Docker will automatically resolve package dependencies, wire up the internal virtual network, and link the application to your Redis cache instance.
+
+3. Verify and Explore
+Once the terminal outputs successful startup logs, navigate to the fully interactive Swagger API documentation panel to run queries and test endpoints:
+
+Interactive API Dashboard: http://localhost:8000/docs
+
+Production Ingestion Workflow (Optional)
+To ingest your own raw text files into the cloud vector index, place your raw text agreements inside the ./data/raw_contracts/ folder and trigger the asynchronous ingestion pipeline by uploading via the /api/v1/upload endpoint in the Swagger UI.
 
 
 ---
 
-### Step 3: Push the Blueprint Live!
+### Sync the Blueprint to GitHub
 
-Once you save those two files in your folder, run these three lines in your terminal to update your GitHub repo:
+Once you save the file, run this final sequence in your terminal to push your pristine documentation live:
 
 ```bash
-git add requirements.txt README.md
-git commit -m "docs: add requirements and production installation guide to README"
+git add README.md
+git commit -m "docs: update README to reflect hybrid docker-compose orchestration architecture"
 git push
